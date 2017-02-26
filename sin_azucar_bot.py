@@ -3,17 +3,17 @@ import requests
 
 from sin_azucar_token import TOKEN
 from bs4 import BeautifulSoup
+import random
 
-
-print(TOKEN)
 bot = telebot.TeleBot(TOKEN)
 
-INCOMING_URL = "http://www.sinazucar.org/page/2"
+MAIN_URL = "http://www.sinazucar.org"
+products = {}
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-	'''This handlert shows a welcome message.'''
-	bot.reply_to(message, "Howdy, how are you doing now?")
+    '''This handlert shows a welcome message.'''
+    bot.reply_to(message, "Howdy, how are you doing now?")
 
 '''
 @bot.message_handler(func=lambda message: True)
@@ -21,18 +21,86 @@ def echo_all(message):
 	#This handler echoes all incoming text messages back to the sender.
 	bot.reply_to(message, message.text)
 '''
-@bot.message_handler(commands=['producto'])
-def get_producto(message):
-	'''
-	Retrieve product info.
-	'''
-	print('pasa')
-	chat_id = message.chat.id
-	# get incoming's page, parse it and cache it
-	incoming_info = download_locations_incoming()
-	print(incoming_info)
-	bot.send_message(chat_id, incoming_info)	
-	#send_message_splitting_if_necessary(chat_id, incoming_info)
+@bot.message_handler(commands=['products'])
+def get_products(message):
+    '''
+    Retrieve product info & photo.
+    '''
+    chat_id = message.chat.id
+    load_data()
+    # get incoming's page, parse it and cache it
+    #incoming_info = download_locations_incoming()
+    #bot.send_message(chat_id, incoming_info)	
+    #send_message_splitting_if_necessary(chat_id, incoming_info)
+    #photo = 'http://www.sinazucar.org/wp-content/uploads/2017/02/093_bimananCrema-705x705.jpg'
+    parameters = ' '.join(message.text.split(' ')[1:]).lower()
+    if len(parameters) != 0:
+        if parameters in products.keys():
+            bot.send_message(chat_id, '<b>'+products[parameters]['info']+':</b> '+info, parse_mode= 'html')
+            bot.send_photo(chat_id, products[parameters]['image'])
+        else:
+            bot.send_message(chat_id,"A message")
+    else: # no parameters
+        bot.send_message(chat_id, "No product available. Try /product_list command.")
+
+@bot.message_handler(commands=['product'])
+def get_product(message):
+    '''
+    Retrieve product info & photo.
+    '''
+    chat_id = message.chat.id
+    parameters = ' '.join(message.text.split(' ')[1:]).lower()
+    if len(parameters) != 0:
+        info, image, title = findMe(parameters)
+        if info is not None and image is not None:
+            bot.send_message(chat_id, '<b>'+title+':</b> '+info, parse_mode= 'html')
+            bot.send_photo(chat_id, image)
+        else:
+            bot.send_message(chat_id,info)
+    else: # no parameters
+        get_random_product(message)
+        #bot.send_message(chat_id, "No product available. Try /product_list command.")
+
+@bot.message_handler(commands=['product_list'])
+def get_product_list(message):
+    '''
+    Retrieve product info.
+    '''
+    chat_id = message.chat.id
+    # get incoming's page, parse it and cache it
+    incoming_info = download_locations_incoming()
+    bot.send_message(chat_id, incoming_info)    
+    #send_message_splitting_if_necessary(chat_id, incoming_info)
+    photo = 'http://www.sinazucar.org/wp-content/uploads/2017/02/093_bimananCrema-705x705.jpg'
+    bot.send_photo(chat_id, photo)
+
+@bot.message_handler(commands=['random'])
+def get_random_product(message):
+    chat_id = message.chat.id
+    r = requests.get(MAIN_URL)
+    if r.status_code == 200:
+        npages  = get_num_pages(r.text)
+        random_page_index = random.randint(1, npages)
+        random_page_URL = MAIN_URL + "/page/" + str(random_page_index) +"/"
+        r2 = requests.get(random_page_URL)
+        if r2.status_code == 200: 
+            soup = BeautifulSoup(r2.text, "lxml")
+            entries = soup.find_all("a",{'class':'av-masonry-entry'})
+            random_product_index = random.randint(0, len(entries)-1)
+            print("{0} :: {1}".format(random_page_URL, entries[random_product_index]['href']))
+            r3 = requests.get(entries[random_product_index]['href'])
+            if r3.status_code == 200:
+                subsoup = BeautifulSoup(r3.text, "lxml")
+                infotext = subsoup.find('p')
+                if infotext is None:
+                    infotext = subsoup.find('li') 
+                info = infotext.text
+                image = subsoup.find('img',{'class':'avia_image '})['src']
+                
+                bot.send_message(chat_id, '<b>'+entries[random_product_index]['title']+':</b> '+info, parse_mode= 'html')
+                bot.send_photo(chat_id, image)
+    else:
+        bot.send_message(chat_id, "The site seems to be unavailable at the moment. Please, try again later.")
 
 def send_message_splitting_if_necessary(chat_id, long_text):
 	'''
@@ -46,44 +114,77 @@ def send_message_splitting_if_necessary(chat_id, long_text):
 			bot.send_message(chat_id, current_text)
 			current_text = ""
 
-def download_locations_incoming():
+def load_data():
     '''
-    Download incoming info page and parses it to a (large) string
+    Load Main page's info
     '''
-    print("download_locations_incoming")
-    r = requests.get(INCOMING_URL)
+    print("load_data()")
+    products = {}
+    r = requests.get(MAIN_URL)
     if r.status_code == 200:
-        return parse_incoming_page(r.text)
+        npages  = get_num_pages(r.text)
+        build_items_dictionary(npages)
+        return npages
     else:
-        return "Hummm, parece que esa informacion no esta disponible en estos momentos. \
-        Por favor, intentalo de nuevo mas tarde"
+        return "The site seems to be unavailable at the moment. \
+        Please, try again later."
 
-def parse_incoming_page(html):
+def get_num_pages(html):
     '''
     Parses incoming info HTML page
     '''
     soup = BeautifulSoup(html, "lxml")
-    pp = soup.find("span",{'class':'pagination-meta'})
-    total_pages = int(pp.text.split(" ")[-1])
+    pagination = soup.find("span",{'class':'pagination-meta'})
+    total_pages = int(pagination.text.split(" ")[-1])
+    return total_pages
 
-    parsed_string = 'PRODUCTOS:\n'
-    zz = soup.find_all("a",{'class':'av-masonry-entry'})
-    for z in zz:
-    	parsed_string += '{0}\n'.format(z['title'])
-    return parsed_string
-    #print("{0} :: {1} :: {2}".format(pp, pp.text, type(pp)))
-    '''
-    table = soup.find('table')
-    rows = table.find_all('tr')[2:-1]
-    for row in rows:
-        columns = row.find_all('td')
-        date = columns[0].text.strip()
-        if date == today_str:
-            continue # Ignores the line if incoming date is today
-        location = columns[1].text.title().strip()
-        info = parse_info_column(columns[2])
-        parsed_string += "- {0}: {1} ({2})\n".format(date, info['info'], location)
-    
-	return parsed_string
-	'''
+def findMe(param):
+    r = requests.get(MAIN_URL)
+    if r.status_code == 200:
+        npages  = get_num_pages(r.text)
+        for num_page in range(npages):
+            num_page += 1
+            page_URL = MAIN_URL + "/page/" + str(num_page) +"/"
+            r = requests.get(page_URL)
+            if r.status_code == 200: 
+                soup = BeautifulSoup(r.text, "lxml")
+                entries = soup.find_all("a",{'class':'av-masonry-entry'})
+                for entry in entries:
+                    if entry['title'].lower() == param.lower():
+                        r2 = requests.get(entry['href'])
+                        if r2.status_code == 200:
+                            subsoup = BeautifulSoup(r2.text, "lxml")
+                            
+                            infotext = subsoup.find('p')
+                            if infotext is None:
+                                infotext = subsoup.find('li') 
+                            info = infotext.text
+                            image = subsoup.find('img',{'class':'avia_image '})['src']
+                            return info, image, entry['title']
+    else:
+        return "The site seems to be unavailable at the moment. Please, try again later.", None, None
+
+    return "Item not found.", None
+
+
+def build_items_dictionary(num_pages):
+    p = {}
+    for num_page in range(num_pages):
+        num_page += 1
+        page_URL = MAIN_URL + "/page/" + str(num_page) +"/"
+        r = requests.get(page_URL)
+        if r.status_code == 200: 
+            soup = BeautifulSoup(r.text, "lxml")
+            entries = soup.find_all("a",{'class':'av-masonry-entry'})
+            for entry in entries:
+                r2 = requests.get(entry['href'])
+                if r2.status_code == 200:
+                    subsoup = BeautifulSoup(r2.text, "lxml")
+                    title = entry['title'].lower()
+                    infotext = subsoup.find('p')
+                    if infotext is None:
+                        infotext = subsoup.find('li') 
+                    info = infotext.text
+                    image = subsoup.find('img',{'class':'avia_image '})['src']
+                    products[title] = {'info':info, 'image': image}
 bot.polling()
