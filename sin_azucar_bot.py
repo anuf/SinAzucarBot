@@ -1,11 +1,13 @@
-import telebot
+# -*- coding: utf-8 -*-
+
+import telebot as tb
 import requests
 
 from sin_azucar_token import TOKEN
 from bs4 import BeautifulSoup
 import random
 
-bot = telebot.TeleBot(TOKEN)
+bot = tb.TeleBot(TOKEN)
 
 MAIN_URL = "http://www.sinazucar.org"
 products = {}
@@ -13,8 +15,11 @@ products = {}
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     '''This handlert shows a welcome message.'''
-    bot.reply_to(message, "Howdy, how are you doing now?")
-
+    '''
+    Display the commands and what are they intended for.
+    '''
+    bot.reply_to(message, help_message())
+    
 '''
 @bot.message_handler(func=lambda message: True)
 def echo_all(message):
@@ -28,11 +33,6 @@ def get_products(message):
     '''
     chat_id = message.chat.id
     load_data()
-    # get incoming's page, parse it and cache it
-    #incoming_info = download_locations_incoming()
-    #bot.send_message(chat_id, incoming_info)	
-    #send_message_splitting_if_necessary(chat_id, incoming_info)
-    #photo = 'http://www.sinazucar.org/wp-content/uploads/2017/02/093_bimananCrema-705x705.jpg'
     parameters = ' '.join(message.text.split(' ')[1:]).lower()
     if len(parameters) != 0:
         if parameters in products.keys():
@@ -48,16 +48,20 @@ def get_product(message):
     '''
     Retrieve product info & photo.
     '''
+
     chat_id = message.chat.id
-    parameters = ' '.join(message.text.split(' ')[1:]).lower()
-    if len(parameters) != 0:
-        info, image, title = findMe(parameters)
+    
+    # extract arguments from message
+    arguments = tb.util.extract_arguments(message.text).lower()
+    
+    if len(arguments) != 0:
+        info, image, title = findMe(arguments)
         if info is not None and image is not None:
             bot.send_message(chat_id, '<b>'+title+':</b> '+info, parse_mode= 'html')
             bot.send_photo(chat_id, image)
         else:
             bot.send_message(chat_id,info)
-    else: # no parameters
+    else: # no arguments
         get_random_product(message)
         #bot.send_message(chat_id, "No product available. Try /product_list command.")
 
@@ -152,19 +156,23 @@ def findMe(param):
                 for entry in entries:
                     if entry['title'].lower() == param.lower():
                         r2 = requests.get(entry['href'])
+                        print(entry['href'])
                         if r2.status_code == 200:
                             subsoup = BeautifulSoup(r2.text, "lxml")
                             
-                            infotext = subsoup.find('p')
-                            if infotext is None:
-                                infotext = subsoup.find('li') 
-                            info = infotext.text
+                            aviaDiv = subsoup.find('div',{'class':'avia_textblock'})
+                            if aviaDiv.p :
+                                infotext = aviaDiv.p.text  
+                            else:
+                                infotext = aviaDiv.ul.li.text 
+                                
+                            info = infotext
                             image = subsoup.find('img',{'class':'avia_image '})['src']
                             return info, image, entry['title']
     else:
         return "The site seems to be unavailable at the moment. Please, try again later.", None, None
 
-    return "Item not found.", None
+    return "Item not found.", None, None
 
 
 def build_items_dictionary(num_pages):
@@ -187,4 +195,9 @@ def build_items_dictionary(num_pages):
                     info = infotext.text
                     image = subsoup.find('img',{'class':'avia_image '})['src']
                     products[title] = {'info':info, 'image': image}
+def help_message():
+    '''Return help message'''
+    message  =  'Este bot muestra el azucar contenido en diversos productos'
+    return message
+
 bot.polling()
