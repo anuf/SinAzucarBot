@@ -6,47 +6,50 @@ import requests
 from sin_azucar_token import TOKEN
 from bs4 import BeautifulSoup
 import random
+import time
 
 bot = tb.TeleBot(TOKEN)
 
-MAIN_URL = "http://www.sinazucar.org"
-products = {}
+commands = {  # command description used in the "help" command
+              'start': 'Get used to the bot',
+              'help': 'Gives you information about the available commands',
+              'product [name]': 'Retrieves a given product or a random one',
+              'list [letter]': 'Show all available products starting with a given letter',
+              'hist': 'List last 5 products shown'
+}
 
-@bot.message_handler(commands=['start', 'help'])
+MAIN_URL = "http://www.sinazucar.org"   
+
+products = {}
+hist = []
+
+# start
+@bot.message_handler(commands=['start'])
 def send_welcome(message):
     '''This handlert shows a welcome message.'''
+    welcome_message = "Howdy!"
+    bot.reply_to(message, welcome_message)
+    #load_data()
+
+# help
+@bot.message_handler(commands=['help'])
+def command_help(message):
     '''
     Display the commands and what are they intended for.
     '''
-    bot.reply_to(message, help_message())
-    
-'''
-@bot.message_handler(func=lambda message: True)
-def echo_all(message):
-	#This handler echoes all incoming text messages back to the sender.
-	bot.reply_to(message, message.text)
-'''
-@bot.message_handler(commands=['products'])
-def get_products(message):
-    '''
-    Retrieve product info & photo.
-    '''
     chat_id = message.chat.id
-    load_data()
-    parameters = ' '.join(message.text.split(' ')[1:]).lower()
-    if len(parameters) != 0:
-        if parameters in products.keys():
-            bot.send_message(chat_id, '<b>'+products[parameters]['info']+':</b> '+info, parse_mode= 'html')
-            bot.send_photo(chat_id, products[parameters]['image'])
-        else:
-            bot.send_message(chat_id,"A message")
-    else: # no parameters
-        bot.send_message(chat_id, "No product available. Try /product_list command.")
+    help_text = "The following commands are available: \n"
+    for key in commands:  # generate help text out of the commands dictionary defined at the top
+        help_text += "/" + key + ": "
+        help_text += commands[key] + "\n"
+    bot.send_message(chat_id, help_text) # send the generated help page
 
+# product
 @bot.message_handler(commands=['product'])
 def get_product(message):
     '''
     Retrieve product info & photo.
+    If no argument is passed, returns a random product
     '''
 
     chat_id = message.chat.id
@@ -59,24 +62,44 @@ def get_product(message):
         if info is not None and image is not None:
             bot.send_message(chat_id, '<b>'+title+':</b> '+info, parse_mode= 'html')
             bot.send_photo(chat_id, image)
+            update_hist(title)
         else:
             bot.send_message(chat_id,info)
     else: # no arguments
         get_random_product(message)
         #bot.send_message(chat_id, "No product available. Try /product_list command.")
 
-@bot.message_handler(commands=['product_list'])
-def get_product_list(message):
+
+@bot.message_handler(commands=['list'])
+def get_list(message):
     '''
-    Retrieve product info.
+    Lists all products starting with a given letter
     '''
+    
     chat_id = message.chat.id
-    # get incoming's page, parse it and cache it
-    incoming_info = download_locations_incoming()
-    bot.send_message(chat_id, incoming_info)    
-    #send_message_splitting_if_necessary(chat_id, incoming_info)
-    photo = 'http://www.sinazucar.org/wp-content/uploads/2017/02/093_bimananCrema-705x705.jpg'
-    bot.send_photo(chat_id, photo)
+    # extract arguments from message
+    arguments = tb.util.extract_arguments(message.text).lower()
+    if len(arguments) != 0:
+        short_list = []
+        for k in products.keys():
+            if k[0].lower() == arguments:
+                short_list.append(k)
+        if len(short_list) == 0:
+            bot.send_message(chat_id,"No products found starting with {0}".format(arguments))
+        else:
+            bot.send_message(chat_id,'\n'.join(sorted(short_list)))
+    else: # no arguments
+        print(products.keys())
+        print(type(products.keys()))
+        bot.send_message(chat_id,'\n'.join(sorted(list(products.keys()))))
+
+@bot.message_handler(commands=['hist'])
+def show_hist(message):
+    '''
+    Last n elementsRetrieve product info.
+    '''
+    chat_id = message.chat.id    
+    bot.send_message(chat_id, '\n'.join(hist))
 
 @bot.message_handler(commands=['random'])
 def get_random_product(message):
@@ -103,8 +126,14 @@ def get_random_product(message):
                 
                 bot.send_message(chat_id, '<b>'+entries[random_product_index]['title']+':</b> '+info, parse_mode= 'html')
                 bot.send_photo(chat_id, image)
+                update_hist(entries[random_product_index])
     else:
         bot.send_message(chat_id, "The site seems to be unavailable at the moment. Please, try again later.")
+
+def update_hist(elem):
+    if len(hist) > 5:
+        hist = hist[1:]
+    hist.append(elem)
 
 def send_message_splitting_if_necessary(chat_id, long_text):
 	'''
@@ -120,7 +149,7 @@ def send_message_splitting_if_necessary(chat_id, long_text):
 
 def load_data():
     '''
-    Load Main page's info
+    Loads all products
     '''
     print("load_data()")
     products = {}
@@ -128,6 +157,7 @@ def load_data():
     if r.status_code == 200:
         npages  = get_num_pages(r.text)
         build_items_dictionary(npages)
+        print("END load_data()")
         return npages
     else:
         return "The site seems to be unavailable at the moment. \
@@ -135,7 +165,7 @@ def load_data():
 
 def get_num_pages(html):
     '''
-    Parses incoming info HTML page
+    Gets number of pages to be scanned
     '''
     soup = BeautifulSoup(html, "lxml")
     pagination = soup.find("span",{'class':'pagination-meta'})
@@ -143,6 +173,9 @@ def get_num_pages(html):
     return total_pages
 
 def findMe(param):
+    '''
+    Finds a product
+    '''
     r = requests.get(MAIN_URL)
     if r.status_code == 200:
         npages  = get_num_pages(r.text)
@@ -195,9 +228,12 @@ def build_items_dictionary(num_pages):
                     info = infotext.text
                     image = subsoup.find('img',{'class':'avia_image '})['src']
                     products[title] = {'info':info, 'image': image}
-def help_message():
-    '''Return help message'''
-    message  =  'Este bot muestra el azucar contenido en diversos productos'
-    return message
 
+
+'''
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
+    #This handler echoes all incoming text messages back to the sender.
+    bot.reply_to(message, message.text)
+'''
 bot.polling()
