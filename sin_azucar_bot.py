@@ -29,7 +29,10 @@ def send_welcome(message):
     '''This handlert shows a welcome message.'''
     welcome_message = "Howdy!"
     bot.reply_to(message, welcome_message)
-    #load_data()
+    start_time = time.time()
+    load_data()
+    print("load time: {0}".format(time.time()-start_time))
+    print("#products: {0}".format(len(products)))
 
 # help
 @bot.message_handler(commands=['help'])
@@ -89,8 +92,6 @@ def get_list(message):
         else:
             bot.send_message(chat_id,'\n'.join(sorted(short_list)))
     else: # no arguments
-        print(products.keys())
-        print(type(products.keys()))
         bot.send_message(chat_id,'\n'.join(sorted(list(products.keys()))))
 
 @bot.message_handler(commands=['hist'])
@@ -98,8 +99,11 @@ def show_hist(message):
     '''
     Last n elementsRetrieve product info.
     '''
-    chat_id = message.chat.id    
-    bot.send_message(chat_id, '\n'.join(hist))
+    chat_id = message.chat.id
+    if len(hist) > 0:
+        bot.send_message(chat_id, '\n'.join(hist))
+    else:
+        bot.send_message(chat_id,"Hist is empty")
 
 @bot.message_handler(commands=['random'])
 def get_random_product(message):
@@ -126,14 +130,15 @@ def get_random_product(message):
                 
                 bot.send_message(chat_id, '<b>'+entries[random_product_index]['title']+':</b> '+info, parse_mode= 'html')
                 bot.send_photo(chat_id, image)
-                update_hist(entries[random_product_index])
+                update_hist(entries[random_product_index]['title'])
     else:
         bot.send_message(chat_id, "The site seems to be unavailable at the moment. Please, try again later.")
 
-def update_hist(elem):
-    if len(hist) > 5:
+def update_hist(prod_name):
+    global hist
+    if len(hist) > 4:
         hist = hist[1:]
-    hist.append(elem)
+    hist.append("* {0}".format(prod_name))
 
 def send_message_splitting_if_necessary(chat_id, long_text):
 	'''
@@ -152,7 +157,6 @@ def load_data():
     Loads all products
     '''
     print("load_data()")
-    products = {}
     r = requests.get(MAIN_URL)
     if r.status_code == 200:
         npages  = get_num_pages(r.text)
