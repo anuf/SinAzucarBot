@@ -1,0 +1,72 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2017-03-02 19:20+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: sin_azucar_bot.py:24
+msgid "Get used to the bot"
+msgstr ""
+
+#: sin_azucar_bot.py:25
+msgid "Gives you information about the available commands"
+msgstr ""
+
+#: sin_azucar_bot.py:26
+msgid "[name]"
+msgstr ""
+
+#: sin_azucar_bot.py:26
+msgid "Retrieves a given product or a random one"
+msgstr ""
+
+#: sin_azucar_bot.py:27
+msgid "[letter]"
+msgstr ""
+
+#: sin_azucar_bot.py:27
+msgid "Show all available products starting with a given letter"
+msgstr ""
+
+#: sin_azucar_bot.py:28
+msgid "List last 5 products shown"
+msgstr ""
+
+#: sin_azucar_bot.py:40
+msgid "Howdy!"
+msgstr ""
+
+#: sin_azucar_bot.py:54
+msgid "The following commands are available: \n"
+msgstr ""
+
+#: sin_azucar_bot.py:101
+#, python-brace-format
+msgid "No products found starting with {0}"
+msgstr ""
+
+#: sin_azucar_bot.py:116
+msgid "Hist is empty"
+msgstr ""
+
+#: sin_azucar_bot.py:145 sin_azucar_bot.py:177 sin_azucar_bot.py:219
+msgid ""
+"The site seems to be unavailable at the moment. Please, try again later."
+msgstr ""
+
+#: sin_azucar_bot.py:221
+msgid "Item not found."
+msgstr ""
